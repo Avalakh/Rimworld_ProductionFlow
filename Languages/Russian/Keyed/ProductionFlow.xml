@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+	<ProductionFlow.TabName>Производство</ProductionFlow.TabName>
+	<ProductionFlow.Recipes>Рецепты</ProductionFlow.Recipes>
+	<ProductionFlow.Workbenches>Верстаки</ProductionFlow.Workbenches>
+	<ProductionFlow.Pawns>Пешки</ProductionFlow.Pawns>
+	<ProductionFlow.Settlers>Поселенцы</ProductionFlow.Settlers>
+	<ProductionFlow.RecipeInfo>Информация о рецепте</ProductionFlow.RecipeInfo>
+	<ProductionFlow.NoRecipes>Нет доступных рецептов</ProductionFlow.NoRecipes>
+	<ProductionFlow.NoWorkbenches>Нет доступных верстаков</ProductionFlow.NoWorkbenches>
+	<ProductionFlow.NoPawns>Нет доступных пешек</ProductionFlow.NoPawns>
+	<ProductionFlow.NoSettlers>Нет доступных поселенцев</ProductionFlow.NoSettlers>
+	<ProductionFlow.PauseBill>Приостановить задачу</ProductionFlow.PauseBill>
+	<ProductionFlow.ResumeBill>Возобновить задачу</ProductionFlow.ResumeBill>
+	<ProductionFlow.DeleteBill>Удалить задачу</ProductionFlow.DeleteBill>
+	<ProductionFlow.MoveBillUp>Переместить вверх</ProductionFlow.MoveBillUp>
+	<ProductionFlow.MoveBillDown>Переместить вниз</ProductionFlow.MoveBillDown>
+	<ProductionFlow.ClickToChangeRepeatMode>Нажмите, чтобы изменить режим</ProductionFlow.ClickToChangeRepeatMode>
+	<ProductionFlow.RepeatMode.RepeatCountFull>Сделать X штук</ProductionFlow.RepeatMode.RepeatCountFull>
+	<ProductionFlow.RepeatMode.TargetCountFull>Повторять до X</ProductionFlow.RepeatMode.TargetCountFull>
+	<ProductionFlow.RepeatMode.ForeverFull>Делать бесконечно</ProductionFlow.RepeatMode.ForeverFull>
+	<ProductionFlow.SelectRecipe>Выберите рецепт для просмотра деталей</ProductionFlow.SelectRecipe>
+	<ProductionFlow.WorkTime>Время работы: {0} секунд</ProductionFlow.WorkTime>
+	<ProductionFlow.WorkSkill>Навык работы: {0}</ProductionFlow.WorkSkill>
+	<ProductionFlow.MinSkill>Минимальный уровень навыка: {0}</ProductionFlow.MinSkill>
+	<ProductionFlow.Ingredients>Ингредиенты:</ProductionFlow.Ingredients>
+	<ProductionFlow.Products>Продукты:</ProductionFlow.Products>
+	<ProductionFlow.Quantity>Количество</ProductionFlow.Quantity>
+	<ProductionFlow.Quality>Качество</ProductionFlow.Quality>
+	<ProductionFlow.AnyQuality>Любое</ProductionFlow.AnyQuality>
+	<ProductionFlow.CreateBills>Создать задачи</ProductionFlow.CreateBills>
+	<ProductionFlow.NoRecipeSelected>Пожалуйста, выберите рецепт</ProductionFlow.NoRecipeSelected>
+	<ProductionFlow.SelectWorkbench>Пожалуйста, выберите хотя бы один верстак</ProductionFlow.SelectWorkbench>
+	<ProductionFlow.BillsCreated>Задачи созданы на {0} верстаке(ах)</ProductionFlow.BillsCreated>
+	<ProductionFlow.NoBillsCreated>Не удалось создать задачи</ProductionFlow.NoBillsCreated>
+	<ProductionFlow.WorkbenchBills>Задачи верстака</ProductionFlow.WorkbenchBills>
+	<ProductionFlow.HoverWorkbench>Наведите курсор на верстак, чтобы увидеть его задачи</ProductionFlow.HoverWorkbench>
+	<ProductionFlow.SelectWorkbenchForBills>Выберите верстак для управления задачами</ProductionFlow.SelectWorkbenchForBills>
+	<ProductionFlow.NoBills>На этом верстаке нет задач</ProductionFlow.NoBills>
+	<ProductionFlow.BillsList>Задачи:</ProductionFlow.BillsList>
+	<ProductionFlow.RepeatCount>Повтор: {0} раз</ProductionFlow.RepeatCount>
+	<ProductionFlow.TargetCount>Цель: {0}</ProductionFlow.TargetCount>
+	<ProductionFlow.RepeatForever>Повтор: Бесконечно</ProductionFlow.RepeatForever>
+	<ProductionFlow.QualityRange>Качество: {0} - {1}</ProductionFlow.QualityRange>
+	<ProductionFlow.InvalidWorkbench>Неверный верстак</ProductionFlow.InvalidWorkbench>
+	<ProductionFlow.Materials>Материалы</ProductionFlow.Materials>
+	<ProductionFlow.SelectRecipeForMaterials>Выберите рецепт для просмотра материалов</ProductionFlow.SelectRecipeForMaterials>
+	<ProductionFlow.NoMaterialsRequired>Материалы не требуются</ProductionFlow.NoMaterialsRequired>
+	<ProductionFlow.RepeatMode.RepeatCount>Сделать {0} штук</ProductionFlow.RepeatMode.RepeatCount>
+	<ProductionFlow.RepeatMode.TargetCount>Повторять до {0}</ProductionFlow.RepeatMode.TargetCount>
+	<ProductionFlow.RepeatMode.Forever>Бесконечно</ProductionFlow.RepeatMode.Forever>
+</LanguageData>

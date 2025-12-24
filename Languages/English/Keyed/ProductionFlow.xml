@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+	<ProductionFlow.TabName>ProductionFlow</ProductionFlow.TabName>
+	<ProductionFlow.Recipes>Recipes</ProductionFlow.Recipes>
+	<ProductionFlow.Workbenches>Workbenches</ProductionFlow.Workbenches>
+	<ProductionFlow.Pawns>Pawns</ProductionFlow.Pawns>
+	<ProductionFlow.Settlers>Settlers</ProductionFlow.Settlers>
+	<ProductionFlow.RecipeInfo>Recipe Information</ProductionFlow.RecipeInfo>
+	<ProductionFlow.NoRecipes>No recipes available</ProductionFlow.NoRecipes>
+	<ProductionFlow.NoWorkbenches>No workbenches available</ProductionFlow.NoWorkbenches>
+	<ProductionFlow.NoPawns>No pawns available</ProductionFlow.NoPawns>
+	<ProductionFlow.NoSettlers>No settlers available</ProductionFlow.NoSettlers>
+	<ProductionFlow.PauseBill>Pause bill</ProductionFlow.PauseBill>
+	<ProductionFlow.ResumeBill>Resume bill</ProductionFlow.ResumeBill>
+	<ProductionFlow.DeleteBill>Delete bill</ProductionFlow.DeleteBill>
+	<ProductionFlow.MoveBillUp>Move up</ProductionFlow.MoveBillUp>
+	<ProductionFlow.MoveBillDown>Move down</ProductionFlow.MoveBillDown>
+	<ProductionFlow.ClickToChangeRepeatMode>Click to change repeat mode</ProductionFlow.ClickToChangeRepeatMode>
+	<ProductionFlow.RepeatMode.RepeatCountFull>Make X items</ProductionFlow.RepeatMode.RepeatCountFull>
+	<ProductionFlow.RepeatMode.TargetCountFull>Repeat until X</ProductionFlow.RepeatMode.TargetCountFull>
+	<ProductionFlow.RepeatMode.ForeverFull>Repeat forever</ProductionFlow.RepeatMode.ForeverFull>
+	<ProductionFlow.SelectRecipe>Select a recipe to view details</ProductionFlow.SelectRecipe>
+	<ProductionFlow.WorkTime>Work time: {0} seconds</ProductionFlow.WorkTime>
+	<ProductionFlow.WorkSkill>Work skill: {0}</ProductionFlow.WorkSkill>
+	<ProductionFlow.MinSkill>Minimum skill level: {0}</ProductionFlow.MinSkill>
+	<ProductionFlow.Ingredients>Ingredients:</ProductionFlow.Ingredients>
+	<ProductionFlow.Products>Products:</ProductionFlow.Products>
+	<ProductionFlow.Quantity>Quantity</ProductionFlow.Quantity>
+	<ProductionFlow.Quality>Quality</ProductionFlow.Quality>
+	<ProductionFlow.AnyQuality>Any</ProductionFlow.AnyQuality>
+	<ProductionFlow.CreateBills>Create Bills</ProductionFlow.CreateBills>
+	<ProductionFlow.NoRecipeSelected>Please select a recipe</ProductionFlow.NoRecipeSelected>
+	<ProductionFlow.SelectWorkbench>Please select at least one workbench</ProductionFlow.SelectWorkbench>
+	<ProductionFlow.BillsCreated>Bills created on {0} workbench(s)</ProductionFlow.BillsCreated>
+	<ProductionFlow.NoBillsCreated>Failed to create bills</ProductionFlow.NoBillsCreated>
+	<ProductionFlow.WorkbenchBills>Workbench Bills</ProductionFlow.WorkbenchBills>
+	<ProductionFlow.HoverWorkbench>Hover over a workbench to see its bills</ProductionFlow.HoverWorkbench>
+	<ProductionFlow.SelectWorkbenchForBills>Select a workbench to manage its bills</ProductionFlow.SelectWorkbenchForBills>
+	<ProductionFlow.NoBills>No bills on this workbench</ProductionFlow.NoBills>
+	<ProductionFlow.BillsList>Bills:</ProductionFlow.BillsList>
+	<ProductionFlow.RepeatCount>Repeat: {0}x</ProductionFlow.RepeatCount>
+	<ProductionFlow.TargetCount>Target: {0}</ProductionFlow.TargetCount>
+	<ProductionFlow.RepeatForever>Repeat: Forever</ProductionFlow.RepeatForever>
+	<ProductionFlow.QualityRange>Quality: {0} - {1}</ProductionFlow.QualityRange>
+	<ProductionFlow.InvalidWorkbench>Invalid workbench</ProductionFlow.InvalidWorkbench>
+	<ProductionFlow.Materials>Materials</ProductionFlow.Materials>
+	<ProductionFlow.SelectRecipeForMaterials>Select a recipe to see materials</ProductionFlow.SelectRecipeForMaterials>
+	<ProductionFlow.NoMaterialsRequired>No materials required</ProductionFlow.NoMaterialsRequired>
+	<ProductionFlow.RepeatMode.RepeatCount>Make {0} items</ProductionFlow.RepeatMode.RepeatCount>
+	<ProductionFlow.RepeatMode.TargetCount>Repeat until {0}</ProductionFlow.RepeatMode.TargetCount>
+	<ProductionFlow.RepeatMode.Forever>Repeat forever</ProductionFlow.RepeatMode.Forever>
+</LanguageData>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+	<name>ProductionFlow</name>
+	<author>ProductionFlow Mod</author>
+	<packageId>ProductionFlow.Mod</packageId>
+	<supportedVersions>
+		<li>1.6</li>
+	</supportedVersions>
+	<description>Adds a new tab on the bottom panel to manage production workflows. Select products and quantities to create bills on selected workbenches.</description>
+	<loadAfter>
+		<li>Ludeon.RimWorld</li>
+	</loadAfter>
+</ModMetaData>

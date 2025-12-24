@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+	<MainButtonDef>
+		<defName>ProductionFlow</defName>
+		<label>ProductionFlow</label>
+		<tabWindowClass>ProductionFlow.MainTabWindow_ProductionFlow</tabWindowClass>
+		<description>Manage production workflows and create bills on workbenches</description>
+		<order>11</order>
+	</MainButtonDef>
+</Defs>
