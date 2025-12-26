@@ -10,8 +10,58 @@ using Verse.Sound;
 
 namespace ProductionFlow
 {
+    public class RecipeNode
+    {
+        public RecipeDef Recipe { get; set; }
+        public List<RecipeNode> Children { get; set; }
+        
+        public RecipeNode(RecipeDef recipe)
+        {
+            Recipe = recipe;
+            Children = new List<RecipeNode>();
+        }
+    }
+    
     public class MainTabWindow_ProductionFlow : MainTabWindow
     {
+        // Cached icon for search workbench button
+        private static Texture2D searchIcon = null;
+        
+        private static Texture2D SearchIcon
+        {
+            get
+            {
+                if (searchIcon == null)
+                {
+                    // Try to get search icon (magnifying glass) from RimWorld
+                    // Standard RimWorld search icon paths
+                    searchIcon = ContentFinder<Texture2D>.Get("UI/Buttons/Search", false);
+                    if (searchIcon == null)
+                    {
+                        searchIcon = ContentFinder<Texture2D>.Get("UI/Overlays/Search", false);
+                    }
+                    if (searchIcon == null)
+                    {
+                        searchIcon = ContentFinder<Texture2D>.Get("UI/Commands/ViewQuest", false);
+                    }
+                    if (searchIcon == null)
+                    {
+                        // Last fallback - try to use TexButton if available
+                        try
+                        {
+                            var texButtonType = typeof(TexButton);
+                            var searchField = texButtonType.GetField("Search", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            if (searchField != null)
+                            {
+                                searchIcon = searchField.GetValue(null) as Texture2D;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                return searchIcon;
+            }
+        }
         // Scroll positions for each panel
         private Vector2 recipesScrollPosition = Vector2.zero;
         private Vector2 workbenchesScrollPosition = Vector2.zero;
@@ -19,6 +69,7 @@ namespace ProductionFlow
         private Vector2 recipeInfoScrollPosition = Vector2.zero;
         private Vector2 workbenchBillsScrollPosition = Vector2.zero;
         private Vector2 materialsScrollPosition = Vector2.zero;
+        private Vector2 relatedRecipesScrollPosition = Vector2.zero;
         
         // Selected recipe
         private RecipeDef selectedRecipe = null;
@@ -48,6 +99,7 @@ namespace ProductionFlow
         private float pawnsScrollHeight = 0f;
         private float recipeInfoScrollHeight = 0f;
         private float workbenchBillsScrollHeight = 0f;
+        private float relatedRecipesScrollHeight = 0f;
         
         // Bill creation settings
         private int quantity = 1;
@@ -59,6 +111,14 @@ namespace ProductionFlow
         
         // Recipe search
         private string recipeSearchText = "";
+        
+        // Related recipes hierarchy
+        private HashSet<RecipeDef> expandedRelatedRecipes = new HashSet<RecipeDef>();
+        private const int MAX_RECIPE_HIERARCHY_DEPTH = 2; // Maximum depth for recipe hierarchy (reduced for performance)
+        private Dictionary<string, List<RecipeDef>> recipeCacheByFilterSummary = new Dictionary<string, List<RecipeDef>>();
+        private RecipeDef cachedRecipeForFilter = null;
+        private List<RecipeDef> cachedAllRecipes = null;
+        private int cachedAllRecipesFrame = -1;
         
 
         public override Vector2 InitialSize
@@ -137,9 +197,15 @@ namespace ProductionFlow
             Rect workbenchBillsRect = new Rect(inRect.x + (columnWidth + margin) * 2, inRect.y, columnWidth, inRect.height);
             DrawWorkbenchBillsPanel(workbenchBillsRect, rowHeight);
             
-            // Column 4: Pawns (full height)
-            Rect pawnsRect = new Rect(inRect.x + (columnWidth + margin) * 3, inRect.y, columnWidth, inRect.height);
+            // Column 4: Pawns (half height) + Related Recipes (half height below)
+            float pawnsHeight = inRect.height / 2f - margin / 2f;
+            Rect pawnsRect = new Rect(inRect.x + (columnWidth + margin) * 3, inRect.y, columnWidth, pawnsHeight);
             DrawPawnsPanel(pawnsRect, rowHeight);
+            
+            float relatedRecipesTop = inRect.y + pawnsHeight + margin;
+            float relatedRecipesHeight = inRect.height - pawnsHeight - margin;
+            Rect relatedRecipesRect = new Rect(inRect.x + (columnWidth + margin) * 3, relatedRecipesTop, columnWidth, relatedRecipesHeight);
+            DrawRelatedRecipesPanel(relatedRecipesRect, rowHeight);
             
             // Bill creation controls (bottom left, below recipe info)
             Rect controlsRect = new Rect(inRect.x, inRect.y + inRect.height - controlsTotalHeight, columnWidth, controlsTotalHeight);
@@ -258,6 +324,9 @@ namespace ProductionFlow
                     materialFilter = null;
                     materialFilterRecipe = null;
                     lastSelectedRecipe = selectedRecipe;
+                    // Clear recipe cache when recipe changes
+                    recipeCacheByFilterSummary.Clear();
+                    cachedRecipeForFilter = selectedRecipe;
                 }
             }
             
@@ -311,7 +380,80 @@ namespace ProductionFlow
             Widgets.DrawBox(rect);
             
             Rect headerRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rowHeight + 5f);
-            Widgets.Label(headerRect, "ProductionFlow.Workbenches".Translate());
+            
+            // Draw title
+            Rect titleRect = new Rect(headerRect.x, headerRect.y, headerRect.width - 30f, headerRect.height);
+            Widgets.Label(titleRect, "ProductionFlow.Workbenches".Translate());
+            
+            // Draw "Select All" button (to the right of title)
+            float buttonSize = rowHeight + 5f;
+            Rect selectAllButtonRect = new Rect(headerRect.xMax - buttonSize - 5f, headerRect.y, buttonSize, buttonSize);
+            Texture2D selectAllIcon = ContentFinder<Texture2D>.Get("UI/Buttons/SelectAll", false);
+            if (selectAllIcon == null)
+            {
+                selectAllIcon = ContentFinder<Texture2D>.Get("UI/Commands/SelectAll", false);
+            }
+            if (selectAllIcon == null)
+            {
+                // Fallback to text button if no icon available
+                if (Widgets.ButtonText(selectAllButtonRect, "✓"))
+                {
+                    List<Thing> availableWorkbenches = GetAvailableWorkbenches();
+                    // Check if all workbenches are selected
+                    bool allSelected = availableWorkbenches.Count > 0 && 
+                                       availableWorkbenches.All(wb => selectedWorkbenches.Contains(wb));
+                    
+                    if (allSelected)
+                    {
+                        // Deselect all
+                        selectedWorkbenches.Clear();
+                    }
+                    else
+                    {
+                        // Select all
+                        selectedWorkbenches.Clear();
+                        foreach (Thing workbench in availableWorkbenches)
+                        {
+                            selectedWorkbenches.Add(workbench);
+                        }
+                    }
+                    SoundDefOf.Tick_High.PlayOneShotOnCamera();
+                }
+                if (Mouse.IsOver(selectAllButtonRect))
+                {
+                    TooltipHandler.TipRegion(selectAllButtonRect, "ProductionFlow.SelectAllWorkbenches".Translate());
+                }
+            }
+            else
+            {
+                if (Widgets.ButtonImage(selectAllButtonRect, selectAllIcon))
+                {
+                    List<Thing> availableWorkbenches = GetAvailableWorkbenches();
+                    // Check if all workbenches are selected
+                    bool allSelected = availableWorkbenches.Count > 0 && 
+                                       availableWorkbenches.All(wb => selectedWorkbenches.Contains(wb));
+                    
+                    if (allSelected)
+                    {
+                        // Deselect all
+                        selectedWorkbenches.Clear();
+                    }
+                    else
+                    {
+                        // Select all
+                        selectedWorkbenches.Clear();
+                        foreach (Thing workbench in availableWorkbenches)
+                        {
+                            selectedWorkbenches.Add(workbench);
+                        }
+                    }
+                    SoundDefOf.Tick_High.PlayOneShotOnCamera();
+                }
+                if (Mouse.IsOver(selectAllButtonRect))
+                {
+                    TooltipHandler.TipRegion(selectAllButtonRect, "ProductionFlow.SelectAllWorkbenches".Translate());
+                }
+            }
             
             Rect scrollRect = new Rect(rect.x + 5f, rect.y + rowHeight + 15f, rect.width - 10f, rect.height - rowHeight - 20f);
             Rect viewRect = new Rect(0f, 0f, scrollRect.width - 16f, workbenchesScrollHeight);
@@ -381,8 +523,24 @@ namespace ProductionFlow
                 }
             }
             
-            // Click area for selecting workbench for bills management
-            Rect clickRect = new Rect(checkboxRect.xMax + 5f, rect.y, rect.width - checkboxRect.xMax - 5f, rect.height);
+            // Draw workbench icon
+            float iconSize = rowHeight * 0.8f;
+            float iconOffset = checkboxSize + 10f;
+            
+            if (workbench.def.uiIcon != null)
+            {
+                Rect iconRect = new Rect(rect.x + iconOffset, rect.y + (rect.height - iconSize) / 2f, iconSize, iconSize);
+                GUI.DrawTexture(iconRect, workbench.def.uiIcon);
+                iconOffset += iconSize + 5f;
+            }
+            
+            // Calculate search button size and position (before clickRect calculation)
+            float buttonSize = rowHeight * 0.8f;
+            float buttonRightMargin = 5f;
+            Rect searchButtonRect = new Rect(rect.xMax - buttonSize - buttonRightMargin, rect.y + (rect.height - buttonSize) / 2f, buttonSize, buttonSize);
+            
+            // Adjust clickRect to exclude search button area
+            Rect clickRect = new Rect(checkboxRect.xMax + 5f, rect.y, rect.width - checkboxRect.xMax - 5f - buttonSize - buttonRightMargin, rect.height);
             if (Widgets.ButtonInvisible(clickRect))
             {
                 if (selectedWorkbenchForBills == workbench)
@@ -395,25 +553,50 @@ namespace ProductionFlow
                 }
             }
             
-            // Draw workbench icon
-            float iconSize = rowHeight * 0.8f;
-            float iconOffset = checkboxSize + 10f;
-            
-            if (workbench.def.uiIcon != null)
-            {
-                Rect iconRect = new Rect(rect.x + iconOffset, rect.y + (rect.height - iconSize) / 2f, iconSize, iconSize);
-                GUI.DrawTexture(iconRect, workbench.def.uiIcon);
-                iconOffset += iconSize + 5f;
-            }
-            
-            Rect labelRect = new Rect(rect.x + iconOffset, rect.y, rect.width - iconOffset - 5f, rect.height);
+            // Adjust label rect to leave space for button
+            Rect labelRect = new Rect(rect.x + iconOffset, rect.y, rect.width - iconOffset - buttonSize - buttonRightMargin - 5f, rect.height);
             Widgets.Label(labelRect, workbench.LabelCap);
             
-            // Show indicator if this workbench is selected for bills
+            // Show indicator if this workbench is selected for bills (positioned before button)
             if (isSelectedForBills)
             {
-                Rect indicatorRect = new Rect(rect.xMax - 15f, rect.y + (rect.height - 10f) / 2f, 10f, 10f);
+                Rect indicatorRect = new Rect(searchButtonRect.x - 15f, rect.y + (rect.height - 10f) / 2f, 10f, 10f);
                 Widgets.DrawBoxSolid(indicatorRect, Color.green);
+            }
+            
+            // Search workbench button (separate click zone)
+            Texture2D icon = SearchIcon;
+            if (icon != null)
+            {
+                if (Widgets.ButtonImage(searchButtonRect, icon))
+                {
+                    if (workbench != null && workbench.Spawned && workbench.Map != null)
+                    {
+                        // Select and jump to workbench
+                        Find.Selector.ClearSelection();
+                        Find.Selector.Select(workbench);
+                        CameraJumper.TryJump(workbench);
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to text button if no icon available
+                if (Widgets.ButtonText(searchButtonRect, "→"))
+                {
+                    if (workbench != null && workbench.Spawned && workbench.Map != null)
+                    {
+                        // Select and jump to workbench
+                        Find.Selector.ClearSelection();
+                        Find.Selector.Select(workbench);
+                        CameraJumper.TryJump(workbench);
+                    }
+                }
+            }
+            
+            if (Mouse.IsOver(searchButtonRect))
+            {
+                TooltipHandler.TipRegion(searchButtonRect, "ProductionFlow.JumpToWorkbench".Translate());
             }
         }
 
@@ -575,11 +758,41 @@ namespace ProductionFlow
                 yPos += controlHeight + 5f;
             }
             
-            // Create bills button (full width, directly under quantity/target)
-            Rect buttonRect = new Rect(xPos, yPos, width, controlHeight);
+            // Create bills button with smart button next to it
+            float smartButtonSize = controlHeight; // Square button, same height as main button
+            float mainButtonWidth = width - smartButtonSize - 5f; // Reduce main button width by smart button size + margin
+            
+            Rect buttonRect = new Rect(xPos, yPos, mainButtonWidth, controlHeight);
             if (Widgets.ButtonText(buttonRect, "ProductionFlow.CreateBills".Translate()))
             {
                 CreateBills();
+            }
+            
+            // Smart create button (square, to the right of main button)
+            Rect smartButtonRect = new Rect(xPos + mainButtonWidth + 5f, yPos, smartButtonSize, smartButtonSize);
+            Texture2D smartIcon = ContentFinder<Texture2D>.Get("UI/Buttons/Auto", false);
+            if (smartIcon == null)
+            {
+                smartIcon = ContentFinder<Texture2D>.Get("UI/Commands/Auto", false);
+            }
+            if (smartIcon == null)
+            {
+                // Fallback to text button
+                if (Widgets.ButtonText(smartButtonRect, "⚡"))
+                {
+                    CreateBillsWithMaterials();
+                }
+            }
+            else
+            {
+                if (Widgets.ButtonImage(smartButtonRect, smartIcon))
+                {
+                    CreateBillsWithMaterials();
+                }
+            }
+            if (Mouse.IsOver(smartButtonRect))
+            {
+                TooltipHandler.TipRegion(smartButtonRect, "ProductionFlow.CreateBillsWithMaterials".Translate());
             }
         }
         
@@ -650,7 +863,8 @@ namespace ProductionFlow
                 if (materialFilter == null || materialFilterRecipe != selectedRecipe)
                 {
                     // Create temporary bill to get properly initialized ingredientFilter
-                    Bill_Production tempBill = new Bill_Production(selectedRecipe);
+                    // Use MakeNewBill() for consistency (same as RimWorld)
+                    Bill tempBill = selectedRecipe.MakeNewBill();
                     materialFilter = new ThingFilter();
                     // Copy all allowances from bill's ingredientFilter (all materials allowed by default)
                     if (tempBill.ingredientFilter != null)
@@ -786,6 +1000,13 @@ namespace ProductionFlow
 
         private List<RecipeDef> GetAllRecipes()
         {
+            // Cache results per frame to avoid repeated expensive operations
+            int currentFrame = Time.frameCount;
+            if (cachedAllRecipes != null && cachedAllRecipesFrame == currentFrame)
+            {
+                return cachedAllRecipes;
+            }
+            
             List<RecipeDef> recipes = new List<RecipeDef>();
             
             if (Current.Game == null)
@@ -816,7 +1037,9 @@ namespace ProductionFlow
                 }
             }
             
-            return uniqueRecipes.ToList();
+            cachedAllRecipes = uniqueRecipes.ToList();
+            cachedAllRecipesFrame = currentFrame;
+            return cachedAllRecipes;
         }
 
         private List<Thing> GetAvailableWorkbenches()
@@ -934,13 +1157,115 @@ namespace ProductionFlow
             return pawns;
         }
 
+        private bool IsBillCompleted(Bill bill)
+        {
+            if (bill is Bill_Production billProduction)
+            {
+                if (billProduction.repeatMode == BillRepeatModeDefOf.RepeatCount)
+                {
+                    // Completed when repeatCount reaches 0
+                    return billProduction.repeatCount <= 0;
+                }
+                else if (billProduction.repeatMode == BillRepeatModeDefOf.TargetCount)
+                {
+                    // Don't remove TargetCount bills - they maintain stockpile quantity
+                    // RimWorld will automatically delete them when target is reached
+                    return false;
+                }
+                // Forever mode is never completed
+                return false;
+            }
+            return false;
+        }
+        
+        private int ClearCompletedBillsFromWorkbench(IBillGiver billGiver)
+        {
+            if (billGiver?.BillStack == null)
+                return 0;
+            
+            int clearedCount = 0;
+            List<Bill> billsToRemove = new List<Bill>();
+            
+            foreach (Bill bill in billGiver.BillStack)
+            {
+                if (IsBillCompleted(bill))
+                {
+                    billsToRemove.Add(bill);
+                }
+            }
+            
+            foreach (Bill bill in billsToRemove)
+            {
+                billGiver.BillStack.Delete(bill);
+                clearedCount++;
+            }
+            
+            return clearedCount;
+        }
+        
+        private int ClearCompletedBillsFromAllWorkbenches()
+        {
+            int totalCleared = 0;
+            
+            if (Current.Game == null)
+                return totalCleared;
+            
+            foreach (Map map in Current.Game.Maps)
+            {
+                if (map == null || map.listerThings == null)
+                    continue;
+                
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+                    if (thing is IBillGiver billGiver && thing.def.building != null && thing.Spawned)
+                    {
+                        totalCleared += ClearCompletedBillsFromWorkbench(billGiver);
+                    }
+                }
+            }
+            
+            return totalCleared;
+        }
+        
         private void DrawWorkbenchBillsPanel(Rect rect, float rowHeight)
         {
             Widgets.DrawBoxSolid(rect, new Color(0.15f, 0.15f, 0.15f, 0.8f));
             Widgets.DrawBox(rect);
             
             Rect headerRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rowHeight + 5f);
-            Widgets.Label(headerRect, "ProductionFlow.WorkbenchBills".Translate());
+            
+            // Draw title
+            Rect titleRect = new Rect(headerRect.x, headerRect.y, headerRect.width - 30f, headerRect.height);
+            Widgets.Label(titleRect, "ProductionFlow.WorkbenchBills".Translate());
+            
+            // Draw clear button (to the right of title)
+            float buttonSize = rowHeight + 5f;
+            Rect clearButtonRect = new Rect(headerRect.xMax - buttonSize - 5f, headerRect.y, buttonSize, buttonSize);
+            Texture2D clearIcon = ContentFinder<Texture2D>.Get("UI/Buttons/Delete", false);
+            if (clearIcon == null)
+            {
+                clearIcon = ContentFinder<Texture2D>.Get("UI/Commands/Cancel", false);
+            }
+            if (clearIcon != null)
+            {
+                if (Widgets.ButtonImage(clearButtonRect, clearIcon))
+                {
+                    int clearedCount = ClearCompletedBillsFromAllWorkbenches();
+                    if (clearedCount > 0)
+                    {
+                        Messages.Message("ProductionFlow.CompletedBillsCleared".Translate(clearedCount), MessageTypeDefOf.PositiveEvent);
+                        SoundDefOf.Tick_High.PlayOneShotOnCamera();
+                    }
+                    else
+                    {
+                        Messages.Message("ProductionFlow.NoCompletedBills".Translate(), MessageTypeDefOf.NeutralEvent);
+                    }
+                }
+                if (Mouse.IsOver(clearButtonRect))
+                {
+                    TooltipHandler.TipRegion(clearButtonRect, "ProductionFlow.ClearCompletedBills".Translate());
+                }
+            }
             
             // Use selected workbench for bills, fallback to hovered if none selected
             Thing workbenchToShow = selectedWorkbenchForBills != null ? selectedWorkbenchForBills : hoveredWorkbench;
@@ -1112,31 +1437,41 @@ namespace ProductionFlow
                 {
                     if (workbench.def.AllRecipes != null && workbench.def.AllRecipes.Contains(selectedRecipe))
                     {
-                        Bill_Production bill = new Bill_Production(selectedRecipe);
-                        bill.SetStoreMode(BillStoreModeDefOf.BestStockpile);
-                        bill.repeatMode = selectedRepeatMode;
+                        // Clear completed bills (quantity = 0) from this workbench before adding new task
+                        ClearCompletedBillsFromWorkbench(billGiver);
                         
-                        if (selectedRepeatMode == BillRepeatModeDefOf.RepeatCount)
-                        {
-                        bill.repeatCount = quantity;
-                        }
-                        else if (selectedRepeatMode == BillRepeatModeDefOf.TargetCount)
-                        {
-                            bill.targetCount = targetCount;
-                        }
-                        // Forever mode doesn't need additional settings
+                        // Use MakeNewBill() extension method (same as RimWorld does in ITab_Bills)
+                        // This ensures correct bill type is created (Bill_Production or Bill_ProductionWithUft)
+                        Bill bill = selectedRecipe.MakeNewBill();
                         
-                        if (selectedQuality.HasValue && selectedRecipe.workSkill != null)
+                        // Cast to Bill_Production to set production-specific properties
+                        if (bill is Bill_Production billProduction)
                         {
-                            bill.qualityRange = new QualityRange(selectedQuality.Value, selectedQuality.Value);
-                        }
-                        
-                        // Apply material filter if one is selected
-                        if (materialFilter != null && bill.ingredientFilter != null)
-                        {
-                            // Copy the selected material filter to the bill's ingredient filter
-                            // This sets the allowed materials for production
-                            bill.ingredientFilter.CopyAllowancesFrom(materialFilter);
+                            billProduction.SetStoreMode(BillStoreModeDefOf.BestStockpile);
+                            billProduction.repeatMode = selectedRepeatMode;
+                            
+                            if (selectedRepeatMode == BillRepeatModeDefOf.RepeatCount)
+                            {
+                                billProduction.repeatCount = quantity;
+                            }
+                            else if (selectedRepeatMode == BillRepeatModeDefOf.TargetCount)
+                            {
+                                billProduction.targetCount = targetCount;
+                            }
+                            // Forever mode doesn't need additional settings
+                            
+                            if (selectedQuality.HasValue && selectedRecipe.workSkill != null)
+                            {
+                                billProduction.qualityRange = new QualityRange(selectedQuality.Value, selectedQuality.Value);
+                            }
+                            
+                            // Apply material filter if one is selected
+                            if (materialFilter != null && billProduction.ingredientFilter != null)
+                            {
+                                // Copy the selected material filter to the bill's ingredient filter
+                                // This sets the allowed materials for production
+                                billProduction.ingredientFilter.CopyAllowancesFrom(materialFilter);
+                            }
                         }
                         
                         billGiver.BillStack.AddBill(bill);
@@ -1300,6 +1635,708 @@ namespace ProductionFlow
                     };
                     yield return dropdownMenuElement;
                 }
+            }
+        }
+        
+        private void CreateBillsWithMaterials()
+        {
+            if (selectedRecipe == null)
+            {
+                Messages.Message("ProductionFlow.NoRecipeSelected".Translate(), MessageTypeDefOf.RejectInput);
+                return;
+            }
+            
+            // Track workbenches that have been used for bills
+            HashSet<Thing> usedWorkbenches = new HashSet<Thing>();
+            int materialBillsCreated = 0;
+            
+            // Get all available workbenches for the main recipe
+            List<Thing> availableWorkbenches = GetAvailableWorkbenches();
+            
+            // Priority order for main recipe:
+            // 1. Selected workbenches
+            // 2. Workbenches already used for materials
+            // 3. Other available workbenches
+            List<Thing> prioritizedMainWorkbenches = new List<Thing>();
+            
+            // Add selected workbenches first
+            foreach (Thing wb in selectedWorkbenches)
+            {
+                if (availableWorkbenches.Contains(wb) && !prioritizedMainWorkbenches.Contains(wb))
+                {
+                    prioritizedMainWorkbenches.Add(wb);
+                }
+            }
+            
+            // Process materials first to populate usedWorkbenches
+            if (selectedRecipe.ingredients != null && selectedRecipe.ingredients.Count > 0)
+            {
+                // Calculate how many items we need to produce
+                int mainRecipeCount = 1;
+                if (selectedRepeatMode == BillRepeatModeDefOf.RepeatCount)
+                {
+                    mainRecipeCount = quantity;
+                }
+                else if (selectedRepeatMode == BillRepeatModeDefOf.TargetCount)
+                {
+                    // For TargetCount, we need to estimate - use targetCount as base
+                    mainRecipeCount = targetCount;
+                }
+                
+                // Process each ingredient
+                foreach (IngredientCount ingredient in selectedRecipe.ingredients)
+                {
+                    if (ingredient.filter == null)
+                        continue;
+                    
+                    // Find recipes that can produce items matching this ingredient filter
+                    // Use cached version with duplicate filtering to match hierarchy display logic
+                    List<RecipeDef> materialRecipes = FindRecipesForIngredientCached(ingredient.filter);
+                    
+                    if (materialRecipes.Count > 0)
+                    {
+                        // Calculate how much material is needed
+                        int materialCount = CalculateMaterialNeeded(ingredient, mainRecipeCount);
+                        
+                        // Find workbenches for material recipes with priority:
+                        // 1. Selected workbenches first
+                        // 2. Workbenches already used for materials
+                        // 3. Other available workbenches
+                        foreach (RecipeDef materialRecipe in materialRecipes)
+                        {
+                            List<Thing> materialWorkbenches = GetWorkbenchesForRecipeWithPriority(
+                                materialRecipe, 
+                                selectedWorkbenches, 
+                                usedWorkbenches
+                            );
+                            
+                            if (materialWorkbenches.Count > 0)
+                            {
+                                // Create bills on prioritized workbenches, minimizing number used
+                                int created = CreateMaterialBillsOnWorkbenches(
+                                    materialRecipe, 
+                                    materialWorkbenches, 
+                                    materialCount, 
+                                    usedWorkbenches
+                                );
+                                materialBillsCreated += created;
+                                
+                                // Add used workbenches to prioritized list for main recipe
+                                // Only add if they can also produce the main recipe
+                                foreach (Thing wb in materialWorkbenches)
+                                {
+                                    if (!usedWorkbenches.Contains(wb))
+                                    {
+                                        usedWorkbenches.Add(wb);
+                                    }
+                                    // Check if this workbench can also produce the main recipe
+                                    if (wb.def.AllRecipes != null && wb.def.AllRecipes.Contains(selectedRecipe))
+                                    {
+                                        if (availableWorkbenches.Contains(wb) && !prioritizedMainWorkbenches.Contains(wb))
+                                        {
+                                            prioritizedMainWorkbenches.Add(wb);
+                                        }
+                                    }
+                                }
+                                
+                                // Material found, break to next ingredient
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add remaining available workbenches (not selected, not used)
+            foreach (Thing wb in availableWorkbenches)
+            {
+                if (!prioritizedMainWorkbenches.Contains(wb))
+                {
+                    prioritizedMainWorkbenches.Add(wb);
+                }
+            }
+            
+            // Create bills for main recipe on prioritized workbenches
+            // Priority: selected workbenches first, then workbenches already used for materials, then others
+            List<Thing> workbenchesForMain = new List<Thing>();
+            
+            if (selectedWorkbenches.Count > 0)
+            {
+                // If workbenches are selected, prioritize them, but also include used workbenches that are selected
+                // Order: selected workbenches that are also used > selected workbenches > used workbenches > others
+                foreach (Thing wb in prioritizedMainWorkbenches)
+                {
+                    if (selectedWorkbenches.Contains(wb))
+                    {
+                        workbenchesForMain.Add(wb);
+                    }
+                }
+                // Add remaining selected workbenches that weren't in prioritized list
+                foreach (Thing wb in selectedWorkbenches)
+                {
+                    if (!workbenchesForMain.Contains(wb) && availableWorkbenches.Contains(wb))
+                    {
+                        workbenchesForMain.Add(wb);
+                    }
+                }
+            }
+            else
+            {
+                // If no workbenches selected, use prioritized list (selected first, then used, then others)
+                workbenchesForMain = prioritizedMainWorkbenches;
+            }
+            
+            int mainBillsCreated = 0;
+            foreach (Thing workbench in workbenchesForMain)
+            {
+                if (workbench is IBillGiver billGiver)
+                {
+                    if (workbench.def.AllRecipes != null && workbench.def.AllRecipes.Contains(selectedRecipe))
+                    {
+                        ClearCompletedBillsFromWorkbench(billGiver);
+                        
+                        Bill bill = selectedRecipe.MakeNewBill();
+                        
+                        if (bill is Bill_Production billProduction)
+                        {
+                            billProduction.SetStoreMode(BillStoreModeDefOf.BestStockpile);
+                            billProduction.repeatMode = selectedRepeatMode;
+                            
+                            if (selectedRepeatMode == BillRepeatModeDefOf.RepeatCount)
+                            {
+                                billProduction.repeatCount = quantity;
+                            }
+                            else if (selectedRepeatMode == BillRepeatModeDefOf.TargetCount)
+                            {
+                                billProduction.targetCount = targetCount;
+                            }
+                            
+                            if (selectedQuality.HasValue && selectedRecipe.workSkill != null)
+                            {
+                                billProduction.qualityRange = new QualityRange(selectedQuality.Value, selectedQuality.Value);
+                            }
+                            
+                            if (materialFilter != null && billProduction.ingredientFilter != null)
+                            {
+                                billProduction.ingredientFilter.CopyAllowancesFrom(materialFilter);
+                            }
+                        }
+                        
+                        billGiver.BillStack.AddBill(bill);
+                        mainBillsCreated++;
+                    }
+                }
+            }
+            
+            if (mainBillsCreated > 0 || materialBillsCreated > 0)
+            {
+                Messages.Message("ProductionFlow.BillsCreatedWithMaterials".Translate(mainBillsCreated, materialBillsCreated), MessageTypeDefOf.PositiveEvent);
+                if (selectedWorkbenches.Count > 0)
+                {
+                    selectedWorkbenches.Clear();
+                }
+            }
+            else
+            {
+                Messages.Message("ProductionFlow.NoBillsCreated".Translate(), MessageTypeDefOf.RejectInput);
+            }
+        }
+        
+        private List<RecipeDef> FindRecipesForIngredient(ThingFilter filter)
+        {
+            List<RecipeDef> recipes = new List<RecipeDef>();
+            
+            if (Current.Game == null || filter == null)
+                return recipes;
+            
+            HashSet<RecipeDef> uniqueRecipes = new HashSet<RecipeDef>();
+            
+            // Search through all recipes to find those that produce items matching the filter
+            foreach (Map map in Current.Game.Maps)
+            {
+                if (map == null || map.listerThings == null)
+                    continue;
+                
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+                    if (thing is IBillGiver && thing.def.building != null && thing.Spawned)
+                    {
+                        if (thing.def.AllRecipes != null)
+                        {
+                            foreach (RecipeDef recipe in thing.def.AllRecipes)
+                            {
+                                if (recipe.products != null && recipe.products.Count > 0)
+                                {
+                                    // Check if any product matches the ingredient filter
+                                    foreach (var product in recipe.products)
+                                    {
+                                        if (product.thingDef != null && filter.Allows(product.thingDef))
+                                        {
+                                            uniqueRecipes.Add(recipe);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return uniqueRecipes.ToList();
+        }
+        
+        private int CalculateMaterialNeeded(IngredientCount ingredient, int mainRecipeCount)
+        {
+            // Calculate base count needed per recipe
+            int baseCount = (int)ingredient.GetBaseCount();
+            
+            // Multiply by number of main recipes
+            int totalNeeded = baseCount * mainRecipeCount;
+            
+            // Round up to account for partial production
+            return totalNeeded;
+        }
+        
+        private List<Thing> GetWorkbenchesForRecipeWithPriority(
+            RecipeDef recipe, 
+            HashSet<Thing> selectedWorkbenches, 
+            HashSet<Thing> usedWorkbenches)
+        {
+            List<Thing> prioritized = new List<Thing>();
+            List<Thing> other = new List<Thing>();
+            
+            if (Current.Game == null)
+                return prioritized;
+            
+            foreach (Map map in Current.Game.Maps)
+            {
+                if (map == null || map.listerThings == null)
+                    continue;
+                
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+                    if (thing is IBillGiver && thing.def.building != null && thing.Spawned)
+                    {
+                        if (thing.def.AllRecipes != null && thing.def.AllRecipes.Contains(recipe))
+                        {
+                            if (selectedWorkbenches.Contains(thing))
+                            {
+                                // Priority 1: Selected workbenches
+                                if (!prioritized.Contains(thing))
+                                {
+                                    prioritized.Insert(0, thing);
+                                }
+                            }
+                            else if (usedWorkbenches.Contains(thing))
+                            {
+                                // Priority 2: Already used workbenches
+                                if (!prioritized.Contains(thing))
+                                {
+                                    prioritized.Add(thing);
+                                }
+                            }
+                            else
+                            {
+                                // Priority 3: Other available workbenches
+                                if (!other.Contains(thing))
+                                {
+                                    other.Add(thing);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Combine: selected first, then used, then others
+            prioritized.AddRange(other);
+            return prioritized;
+        }
+        
+        private int CreateMaterialBillsOnWorkbenches(
+            RecipeDef materialRecipe, 
+            List<Thing> workbenches, 
+            int materialCount, 
+            HashSet<Thing> usedWorkbenches)
+        {
+            // Get how many items the recipe produces per execution
+            int itemsPerRecipe = 1;
+            if (materialRecipe.products != null && materialRecipe.products.Count > 0)
+            {
+                var mainProduct = materialRecipe.products[0];
+                if (mainProduct.count > 0)
+                {
+                    itemsPerRecipe = mainProduct.count;
+                }
+            }
+            
+            // Calculate how many recipe executions we need to produce enough material
+            // Round up to ensure we have enough
+            int recipesNeeded = (int)Math.Ceiling((double)materialCount / itemsPerRecipe);
+            
+            // Minimize number of workbenches by grouping tasks
+            // Try to use as few workbenches as possible by putting all tasks on first workbench if possible
+            
+            int remainingRecipes = recipesNeeded;
+            int billsCreated = 0;
+            
+            foreach (Thing workbench in workbenches)
+            {
+                if (remainingRecipes <= 0)
+                    break;
+                
+                if (workbench is IBillGiver billGiver)
+                {
+                    if (workbench.def.AllRecipes != null && workbench.def.AllRecipes.Contains(materialRecipe))
+                    {
+                        ClearCompletedBillsFromWorkbench(billGiver);
+                        
+                        Bill bill = materialRecipe.MakeNewBill();
+                        
+                        if (bill is Bill_Production billProduction)
+                        {
+                            billProduction.SetStoreMode(BillStoreModeDefOf.BestStockpile);
+                            billProduction.repeatMode = BillRepeatModeDefOf.RepeatCount;
+                            
+                            // Put all remaining recipes on this workbench to minimize number of workbenches used
+                            billProduction.repeatCount = remainingRecipes;
+                            remainingRecipes = 0;
+                        }
+                        
+                        billGiver.BillStack.AddBill(bill);
+                        usedWorkbenches.Add(workbench);
+                        billsCreated++;
+                        
+                        if (remainingRecipes <= 0)
+                            break;
+                    }
+                }
+            }
+            
+            return billsCreated;
+        }
+        
+        private List<RecipeNode> GetRelatedRecipesHierarchy()
+        {
+            List<RecipeNode> rootNodes = new List<RecipeNode>();
+            
+            if (selectedRecipe == null || selectedRecipe.ingredients == null || selectedRecipe.ingredients.Count == 0)
+                return rootNodes;
+            
+            // Clear cache if recipe changed
+            if (cachedRecipeForFilter != selectedRecipe)
+            {
+                recipeCacheByFilterSummary.Clear();
+                cachedRecipeForFilter = selectedRecipe;
+            }
+            
+            HashSet<RecipeDef> rootRecipes = new HashSet<RecipeDef>();
+            
+            // For each ingredient in the selected recipe, find recipes that produce matching materials
+            foreach (IngredientCount ingredient in selectedRecipe.ingredients)
+            {
+                if (ingredient.filter == null)
+                    continue;
+                
+                List<RecipeDef> recipesForIngredient = FindRecipesForIngredientCached(ingredient.filter);
+                foreach (RecipeDef recipe in recipesForIngredient)
+                {
+                    rootRecipes.Add(recipe);
+                }
+            }
+            
+            // Filter duplicates from root recipes
+            List<RecipeDef> filteredRootRecipes = FilterDuplicateRecipes(rootRecipes.ToList());
+            
+            // Build tree for each root recipe (only first level, children built on demand when expanded)
+            foreach (RecipeDef rootRecipe in filteredRootRecipes.OrderBy(r => r.label))
+            {
+                HashSet<RecipeDef> branchRecipes = new HashSet<RecipeDef>(); // Track recipes in current branch to avoid cycles
+                RecipeNode node = BuildRecipeNode(rootRecipe, branchRecipes, 0);
+                if (node != null)
+                {
+                    rootNodes.Add(node);
+                }
+            }
+            
+            return rootNodes;
+        }
+        
+        private RecipeNode BuildRecipeNode(RecipeDef recipe, HashSet<RecipeDef> branchRecipes, int depth)
+        {
+            // Limit depth to avoid performance issues
+            if (depth >= MAX_RECIPE_HIERARCHY_DEPTH)
+                return null;
+            
+            // Avoid cycles: don't process if this recipe is already in the current branch
+            if (branchRecipes.Contains(recipe))
+                return null;
+            
+            branchRecipes.Add(recipe);
+            RecipeNode node = new RecipeNode(recipe);
+            
+            // Check if this recipe has ingredients that can be produced by other recipes
+            if (recipe.ingredients != null && recipe.ingredients.Count > 0 && depth < MAX_RECIPE_HIERARCHY_DEPTH - 1)
+            {
+                foreach (IngredientCount ingredient in recipe.ingredients)
+                {
+                    if (ingredient.filter == null)
+                        continue;
+                    
+                    List<RecipeDef> childRecipes = FindRecipesForIngredientCached(ingredient.filter);
+                    
+                    foreach (RecipeDef childRecipe in childRecipes)
+                    {
+                        // Avoid cycles: don't add if it's the same recipe
+                        if (childRecipe != recipe)
+                        {
+                            // Create a new branch set for each child to allow same recipe in different branches
+                            HashSet<RecipeDef> childBranch = new HashSet<RecipeDef>(branchRecipes);
+                            RecipeNode childNode = BuildRecipeNode(childRecipe, childBranch, depth + 1);
+                            if (childNode != null)
+                            {
+                                node.Children.Add(childNode);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return node;
+        }
+        
+        private List<RecipeDef> FindRecipesForIngredientCached(ThingFilter filter)
+        {
+            if (filter == null)
+                return new List<RecipeDef>();
+            
+            // Use filter summary as cache key
+            string filterKey = filter.Summary;
+            if (string.IsNullOrEmpty(filterKey))
+                filterKey = "empty";
+            
+            // Check cache first
+            if (recipeCacheByFilterSummary.ContainsKey(filterKey))
+            {
+                return recipeCacheByFilterSummary[filterKey];
+            }
+            
+            // Use GetAllRecipes() for better performance
+            List<RecipeDef> allRecipes = GetAllRecipes();
+            HashSet<RecipeDef> uniqueRecipes = new HashSet<RecipeDef>();
+            
+            foreach (RecipeDef recipe in allRecipes)
+            {
+                if (recipe.products == null || recipe.products.Count == 0)
+                    continue;
+                
+                // Check if any product matches the ingredient filter
+                foreach (var product in recipe.products)
+                {
+                    if (product.thingDef != null && filter.Allows(product.thingDef))
+                    {
+                        uniqueRecipes.Add(recipe);
+                        break;
+                    }
+                }
+            }
+            
+            // Filter duplicates: keep only recipe with smallest count for each product type
+            List<RecipeDef> filteredRecipes = FilterDuplicateRecipes(uniqueRecipes.ToList());
+            recipeCacheByFilterSummary[filterKey] = filteredRecipes;
+            return filteredRecipes;
+        }
+        
+        private List<RecipeDef> FilterDuplicateRecipes(List<RecipeDef> recipes)
+        {
+            // Group recipes by their main product (thingDef)
+            // For each product type, keep only the recipe with smallest count
+            Dictionary<ThingDef, RecipeDef> bestRecipes = new Dictionary<ThingDef, RecipeDef>();
+            
+            foreach (RecipeDef recipe in recipes)
+            {
+                if (recipe.products == null || recipe.products.Count == 0)
+                    continue;
+                
+                // Get main product (first product)
+                var mainProduct = recipe.products[0];
+                if (mainProduct.thingDef == null)
+                    continue;
+                
+                ThingDef productDef = mainProduct.thingDef;
+                int productCount = mainProduct.count;
+                
+                if (!bestRecipes.ContainsKey(productDef))
+                {
+                    // First recipe for this product
+                    bestRecipes[productDef] = recipe;
+                }
+                else
+                {
+                    // Compare with existing recipe - keep the one with smaller count
+                    RecipeDef existingRecipe = bestRecipes[productDef];
+                    int existingCount = existingRecipe.products[0].count;
+                    
+                    if (productCount < existingCount)
+                    {
+                        bestRecipes[productDef] = recipe;
+                    }
+                }
+            }
+            
+            return bestRecipes.Values.ToList();
+        }
+        
+        private void DrawRelatedRecipesPanel(Rect rect, float rowHeight)
+        {
+            Widgets.DrawBoxSolid(rect, new Color(0.15f, 0.15f, 0.15f, 0.8f));
+            Widgets.DrawBox(rect);
+            
+            Rect headerRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rowHeight + 5f);
+            Widgets.Label(headerRect, "ProductionFlow.RelatedRecipes".Translate());
+            
+            Rect scrollRect = new Rect(rect.x + 5f, rect.y + rowHeight + 15f, rect.width - 10f, rect.height - rowHeight - 20f);
+            Rect viewRect = new Rect(0f, 0f, scrollRect.width - 16f, relatedRecipesScrollHeight);
+            
+            Widgets.BeginScrollView(scrollRect, ref relatedRecipesScrollPosition, viewRect);
+            
+            if (selectedRecipe == null)
+            {
+                Rect noRecipeRect = new Rect(0f, 0f, viewRect.width, rowHeight);
+                Widgets.Label(noRecipeRect, "ProductionFlow.SelectRecipeForRelatedRecipes".Translate());
+                relatedRecipesScrollHeight = rowHeight;
+            }
+            else
+            {
+                List<RecipeNode> recipeHierarchy = GetRelatedRecipesHierarchy();
+                
+                if (recipeHierarchy.Count == 0)
+                {
+                    Rect noRelatedRecipesRect = new Rect(0f, 0f, viewRect.width, rowHeight);
+                    Widgets.Label(noRelatedRecipesRect, "ProductionFlow.NoRelatedRecipes".Translate());
+                    relatedRecipesScrollHeight = rowHeight;
+                }
+                else
+                {
+                    float yPos = 0f;
+                    float recipeRowHeight = rowHeight + 2f;
+                    
+                    foreach (RecipeNode rootNode in recipeHierarchy)
+                    {
+                        yPos = DrawRecipeNode(viewRect, rootNode, 0, yPos, recipeRowHeight, scrollRect);
+                    }
+                    relatedRecipesScrollHeight = yPos;
+                }
+            }
+            
+            Widgets.EndScrollView();
+        }
+        
+        private float DrawRecipeNode(Rect viewRect, RecipeNode node, int depth, float yPos, float rowHeight, Rect scrollRect)
+        {
+            Rect recipeRect = new Rect(0f, yPos, viewRect.width, rowHeight - 2f);
+            
+            if (yPos - relatedRecipesScrollPosition.y + rowHeight >= 0f && yPos - relatedRecipesScrollPosition.y <= scrollRect.height)
+            {
+                DrawRelatedRecipeRow(recipeRect, node.Recipe, depth, node.Children.Count > 0);
+            }
+            
+            yPos += rowHeight;
+            
+            // Draw children if expanded
+            bool isExpanded = expandedRelatedRecipes.Contains(node.Recipe);
+            if (isExpanded && node.Children.Count > 0)
+            {
+                foreach (RecipeNode childNode in node.Children.OrderBy(n => n.Recipe.label))
+                {
+                    yPos = DrawRecipeNode(viewRect, childNode, depth + 1, yPos, rowHeight, scrollRect);
+                }
+            }
+            
+            return yPos;
+        }
+        
+        private void DrawRelatedRecipeRow(Rect rect, RecipeDef recipe, int depth, bool hasChildren)
+        {
+            float indentPerLevel = 20f;
+            float indent = depth * indentPerLevel;
+            float expandButtonSize = rect.height * 0.7f;
+            float iconOffset = indent + 5f;
+            
+            // Draw expand/collapse button if has children
+            if (hasChildren)
+            {
+                bool isExpanded = expandedRelatedRecipes.Contains(recipe);
+                Rect expandButtonRect = new Rect(rect.x + indent + 2f, rect.y + (rect.height - expandButtonSize) / 2f, expandButtonSize, expandButtonSize);
+                
+                if (Widgets.ButtonInvisible(expandButtonRect))
+                {
+                    if (isExpanded)
+                    {
+                        expandedRelatedRecipes.Remove(recipe);
+                    }
+                    else
+                    {
+                        expandedRelatedRecipes.Add(recipe);
+                    }
+                    SoundDefOf.Tick_Low.PlayOneShotOnCamera();
+                }
+                
+                // Draw expand/collapse icon
+                Texture2D expandIcon = isExpanded ? TexButton.Collapse : TexButton.Reveal;
+                if (expandIcon != null)
+                {
+                    GUI.DrawTexture(expandButtonRect, expandIcon);
+                }
+                
+                iconOffset += expandButtonSize + 5f;
+            }
+            else
+            {
+                iconOffset += 5f;
+            }
+            
+            // Draw recipe icon
+            Texture2D icon = null;
+            if (recipe.products != null && recipe.products.Count > 0)
+            {
+                var firstProduct = recipe.products[0];
+                if (firstProduct.thingDef != null)
+                {
+                    icon = firstProduct.thingDef.uiIcon;
+                }
+            }
+            
+            float iconSize = rect.height * 0.8f;
+            
+            if (icon != null)
+            {
+                Rect iconRect = new Rect(rect.x + iconOffset, rect.y + (rect.height - iconSize) / 2f, iconSize, iconSize);
+                GUI.DrawTexture(iconRect, icon);
+                iconOffset += iconSize + 5f;
+            }
+            
+            Rect labelRect = new Rect(rect.x + iconOffset, rect.y, rect.width - iconOffset - 5f, rect.height);
+            string label = recipe.LabelCap;
+            if (recipe.products != null && recipe.products.Count > 0)
+            {
+                var firstProduct = recipe.products[0];
+                if (firstProduct.thingDef != null)
+                {
+                    label = firstProduct.thingDef.LabelCap;
+                    if (firstProduct.count > 1)
+                    {
+                        label += " (" + firstProduct.count + " шт)";
+                    }
+                }
+            }
+            Widgets.Label(labelRect, label);
+            
+            if (Mouse.IsOver(rect))
+            {
+                Widgets.DrawHighlight(rect);
+                TooltipHandler.TipRegion(rect, recipe.description);
             }
         }
     }

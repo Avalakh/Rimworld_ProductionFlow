@@ -49,4 +49,16 @@
 	<ProductionFlow.RepeatMode.RepeatCount>Сделать {0} штук</ProductionFlow.RepeatMode.RepeatCount>
 	<ProductionFlow.RepeatMode.TargetCount>Повторять до {0}</ProductionFlow.RepeatMode.TargetCount>
 	<ProductionFlow.RepeatMode.Forever>Бесконечно</ProductionFlow.RepeatMode.Forever>
+	<ProductionFlow.JumpToWorkbench>Найти верстак на карте</ProductionFlow.JumpToWorkbench>
+	<ProductionFlow.ClearCompletedBills>Очистить выполненные задачи (количество = 0) из всех верстаков</ProductionFlow.ClearCompletedBills>
+	<ProductionFlow.CompletedBillsCleared>Очищено выполненных задач: {0}</ProductionFlow.CompletedBillsCleared>
+	<ProductionFlow.NoCompletedBills>Нет выполненных задач для очистки</ProductionFlow.NoCompletedBills>
+	<ProductionFlow.SelectAllWorkbenches>Выделить все верстаки</ProductionFlow.SelectAllWorkbenches>
+	<ProductionFlow.CreateBillsWithMaterials>Создать задачи с автоматическим созданием материалов</ProductionFlow.CreateBillsWithMaterials>
+	<ProductionFlow.BillsCreatedWithMaterials>Создано задач: {0}, задач для материалов: {1}</ProductionFlow.BillsCreatedWithMaterials>
+	<ProductionFlow.NoMaps>Нет доступных карт</ProductionFlow.NoMaps>
+	<ProductionFlow.NoWorkbenchesForRecipe>Нет верстаков для выбранного рецепта</ProductionFlow.NoWorkbenchesForRecipe>
+	<ProductionFlow.RelatedRecipes>Связанные рецепты</ProductionFlow.RelatedRecipes>
+	<ProductionFlow.SelectRecipeForRelatedRecipes>Выберите рецепт для просмотра связанных рецептов</ProductionFlow.SelectRecipeForRelatedRecipes>
+	<ProductionFlow.NoRelatedRecipes>Нет связанных рецептов</ProductionFlow.NoRelatedRecipes>
 </LanguageData>

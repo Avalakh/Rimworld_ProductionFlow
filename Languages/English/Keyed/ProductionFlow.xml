@@ -49,4 +49,15 @@
 	<ProductionFlow.RepeatMode.RepeatCount>Make {0} items</ProductionFlow.RepeatMode.RepeatCount>
 	<ProductionFlow.RepeatMode.TargetCount>Repeat until {0}</ProductionFlow.RepeatMode.TargetCount>
 	<ProductionFlow.RepeatMode.Forever>Repeat forever</ProductionFlow.RepeatMode.Forever>
+	<ProductionFlow.ClearCompletedBills>Clear completed bills (quantity = 0) from all workbenches</ProductionFlow.ClearCompletedBills>
+	<ProductionFlow.CompletedBillsCleared>Cleared completed bills: {0}</ProductionFlow.CompletedBillsCleared>
+	<ProductionFlow.NoCompletedBills>No completed bills to clear</ProductionFlow.NoCompletedBills>
+	<ProductionFlow.SelectAllWorkbenches>Select all workbenches</ProductionFlow.SelectAllWorkbenches>
+	<ProductionFlow.CreateBillsWithMaterials>Create bills with automatic material creation</ProductionFlow.CreateBillsWithMaterials>
+	<ProductionFlow.BillsCreatedWithMaterials>Created bills: {0}, material bills: {1}</ProductionFlow.BillsCreatedWithMaterials>
+	<ProductionFlow.NoMaps>No maps available</ProductionFlow.NoMaps>
+	<ProductionFlow.NoWorkbenchesForRecipe>No workbenches available for selected recipe</ProductionFlow.NoWorkbenchesForRecipe>
+	<ProductionFlow.RelatedRecipes>Related Recipes</ProductionFlow.RelatedRecipes>
+	<ProductionFlow.SelectRecipeForRelatedRecipes>Select a recipe to see related recipes</ProductionFlow.SelectRecipeForRelatedRecipes>
+	<ProductionFlow.NoRelatedRecipes>No related recipes</ProductionFlow.NoRelatedRecipes>
 </LanguageData>
