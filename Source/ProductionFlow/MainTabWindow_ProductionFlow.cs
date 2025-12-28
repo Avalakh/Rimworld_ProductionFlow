@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using RimWorld;
+using RimWorld.Planet;
 using UnityEngine;
 using Verse;
 using Verse.Sound;
@@ -115,6 +116,9 @@ namespace ProductionFlow
         // Related recipes hierarchy
         private HashSet<RecipeDef> expandedRelatedRecipes = new HashSet<RecipeDef>();
         private const int MAX_RECIPE_HIERARCHY_DEPTH = 2; // Maximum depth for recipe hierarchy (reduced for performance)
+        
+        // Expanded settlements for workbench grouping
+        private HashSet<Map> expandedSettlements = new HashSet<Map>();
         private Dictionary<string, List<RecipeDef>> recipeCacheByFilterSummary = new Dictionary<string, List<RecipeDef>>();
         private RecipeDef cachedRecipeForFilter = null;
         private List<RecipeDef> cachedAllRecipes = null;
@@ -460,9 +464,9 @@ namespace ProductionFlow
             
             Widgets.BeginScrollView(scrollRect, ref workbenchesScrollPosition, viewRect);
             
-            List<Thing> workbenches = GetAvailableWorkbenches();
+            Dictionary<Map, List<Thing>> workbenchesBySettlement = GetWorkbenchesBySettlement();
             
-            if (workbenches.Count == 0)
+            if (workbenchesBySettlement.Count == 0)
             {
                 Rect noWorkbenchesRect = new Rect(0f, 0f, viewRect.width, rowHeight);
                 Widgets.Label(noWorkbenchesRect, "ProductionFlow.NoWorkbenches".Translate());
@@ -471,22 +475,118 @@ namespace ProductionFlow
             else
             {
                 float yPos = 0f;
+                float settlementHeaderHeight = rowHeight * 1.2f;
                 float workbenchRowHeight = rowHeight * 1.5f;
-                foreach (Thing workbench in workbenches)
+                
+                foreach (var kvp in workbenchesBySettlement.OrderBy(x => GetSettlementName(x.Key)))
                 {
-                    Rect workbenchRect = new Rect(0f, yPos, viewRect.width, workbenchRowHeight);
+                    Map map = kvp.Key;
+                    List<Thing> workbenches = kvp.Value;
+                    bool isExpanded = expandedSettlements.Contains(map);
                     
-                    if (yPos - workbenchesScrollPosition.y + workbenchRowHeight >= 0f && yPos - workbenchesScrollPosition.y <= scrollRect.height)
+                    // Draw settlement header
+                    Rect settlementHeaderRect = new Rect(0f, yPos, viewRect.width, settlementHeaderHeight);
+                    if (yPos - workbenchesScrollPosition.y + settlementHeaderHeight >= 0f && yPos - workbenchesScrollPosition.y <= scrollRect.height)
                     {
-                        DrawWorkbenchRow(workbenchRect, workbench, rowHeight);
+                        DrawSettlementHeader(settlementHeaderRect, map, workbenches, rowHeight);
                     }
+                    yPos += settlementHeaderHeight + 2f;
                     
-                    yPos += workbenchRowHeight + 2f;
+                    // Draw workbenches if expanded
+                    if (isExpanded)
+                    {
+                        foreach (Thing workbench in workbenches.OrderBy(w => w.LabelCap))
+                        {
+                            Rect workbenchRect = new Rect(0f, yPos, viewRect.width, workbenchRowHeight);
+                            
+                            if (yPos - workbenchesScrollPosition.y + workbenchRowHeight >= 0f && yPos - workbenchesScrollPosition.y <= scrollRect.height)
+                            {
+                                DrawWorkbenchRow(workbenchRect, workbench, rowHeight);
+                            }
+                            
+                            yPos += workbenchRowHeight + 2f;
+                        }
+                    }
                 }
                 workbenchesScrollHeight = yPos;
             }
             
             Widgets.EndScrollView();
+        }
+        
+        private void DrawSettlementHeader(Rect rect, Map map, List<Thing> workbenches, float rowHeight)
+        {
+            bool isExpanded = expandedSettlements.Contains(map);
+            bool isHovered = Mouse.IsOver(rect);
+            
+            if (isHovered)
+            {
+                Widgets.DrawHighlight(rect);
+            }
+            
+            float expandButtonSize = rect.height * 0.7f;
+            Rect expandButtonRect = new Rect(rect.x + 5f, rect.y + (rect.height - expandButtonSize) / 2f, expandButtonSize, expandButtonSize);
+            
+            // Handle expand/collapse click (only on expand button area)
+            if (Widgets.ButtonInvisible(expandButtonRect))
+            {
+                if (isExpanded)
+                {
+                    expandedSettlements.Remove(map);
+                }
+                else
+                {
+                    expandedSettlements.Add(map);
+                }
+                SoundDefOf.Tick_Low.PlayOneShotOnCamera();
+            }
+            
+            // Draw expand/collapse icon
+            Texture2D expandIcon = isExpanded ? TexButton.Collapse : TexButton.Reveal;
+            if (expandIcon != null)
+            {
+                GUI.DrawTexture(expandButtonRect, expandIcon);
+            }
+            
+            // Draw checkbox for selecting all workbenches in settlement
+            float checkboxSize = rowHeight * 0.8f;
+            float checkboxOffset = expandButtonSize + 10f;
+            Rect checkboxRect = new Rect(rect.x + checkboxOffset, rect.y + (rect.height - checkboxSize) / 2f, checkboxSize, checkboxSize);
+            
+            // Check if all workbenches in this settlement are selected
+            bool allSelected = workbenches.Count > 0 && workbenches.All(wb => selectedWorkbenches.Contains(wb));
+            bool checkboxState = allSelected;
+            
+            Widgets.Checkbox(checkboxRect.position, ref checkboxState);
+            
+            // Handle checkbox state change
+            if (checkboxState != allSelected)
+            {
+                if (checkboxState)
+                {
+                    // Select all workbenches in this settlement
+                    foreach (Thing workbench in workbenches)
+                    {
+                        selectedWorkbenches.Add(workbench);
+                    }
+                }
+                else
+                {
+                    // Deselect all workbenches in this settlement
+                    foreach (Thing workbench in workbenches)
+                    {
+                        selectedWorkbenches.Remove(workbench);
+                    }
+                }
+                SoundDefOf.Tick_High.PlayOneShotOnCamera();
+            }
+            
+            // Draw settlement name and workbench count
+            float labelOffset = checkboxOffset + checkboxSize + 10f;
+            Rect labelRect = new Rect(rect.x + labelOffset, rect.y, rect.width - labelOffset - 5f, rect.height);
+            string settlementName = GetSettlementName(map);
+            string labelText = settlementName + " (" + workbenches.Count + ")";
+            Widgets.Label(labelRect, labelText);
         }
 
         private void DrawWorkbenchRow(Rect rect, Thing workbench, float rowHeight)
@@ -507,8 +607,10 @@ namespace ProductionFlow
                 Widgets.DrawBoxSolid(rect, new Color(0.3f, 0.5f, 0.3f, 0.3f));
             }
             
+            // Add indentation for workbenches under settlements
+            float indent = 25f;
             float checkboxSize = rowHeight * 0.8f;
-            Rect checkboxRect = new Rect(rect.x + 5f, rect.y + (rect.height - checkboxSize) / 2f, checkboxSize, checkboxSize);
+            Rect checkboxRect = new Rect(rect.x + indent + 5f, rect.y + (rect.height - checkboxSize) / 2f, checkboxSize, checkboxSize);
             Widgets.Checkbox(checkboxRect.position, ref isSelected);
             
             if (isSelected != selectedWorkbenches.Contains(workbench))
@@ -525,7 +627,7 @@ namespace ProductionFlow
             
             // Draw workbench icon
             float iconSize = rowHeight * 0.8f;
-            float iconOffset = checkboxSize + 10f;
+            float iconOffset = indent + checkboxSize + 10f;
             
             if (workbench.def.uiIcon != null)
             {
@@ -539,8 +641,8 @@ namespace ProductionFlow
             float buttonRightMargin = 5f;
             Rect searchButtonRect = new Rect(rect.xMax - buttonSize - buttonRightMargin, rect.y + (rect.height - buttonSize) / 2f, buttonSize, buttonSize);
             
-            // Adjust clickRect to exclude search button area
-            Rect clickRect = new Rect(checkboxRect.xMax + 5f, rect.y, rect.width - checkboxRect.xMax - 5f - buttonSize - buttonRightMargin, rect.height);
+            // Adjust clickRect to exclude search button area (accounting for indent)
+            Rect clickRect = new Rect(checkboxRect.xMax + 5f, rect.y, rect.width - (checkboxRect.xMax - rect.x) - buttonSize - buttonRightMargin, rect.height);
             if (Widgets.ButtonInvisible(clickRect))
             {
                 if (selectedWorkbenchForBills == workbench)
@@ -1071,6 +1173,57 @@ namespace ProductionFlow
             
             return workbenches;
         }
+        
+        private Dictionary<Map, List<Thing>> GetWorkbenchesBySettlement()
+        {
+            Dictionary<Map, List<Thing>> workbenchesBySettlement = new Dictionary<Map, List<Thing>>();
+            
+            if (selectedRecipe == null)
+                return workbenchesBySettlement;
+            
+            if (Current.Game == null)
+                return workbenchesBySettlement;
+            
+            foreach (Map map in Current.Game.Maps)
+            {
+                if (map == null || map.listerThings == null)
+                    continue;
+                
+                List<Thing> workbenches = new List<Thing>();
+                
+                foreach (Thing thing in map.listerThings.AllThings)
+                {
+                    if (thing is IBillGiver && thing.def.building != null && thing.Spawned)
+                    {
+                        if (thing.def.AllRecipes != null && thing.def.AllRecipes.Contains(selectedRecipe))
+                        {
+                            workbenches.Add(thing);
+                        }
+                    }
+                }
+                
+                if (workbenches.Count > 0)
+                {
+                    workbenchesBySettlement[map] = workbenches;
+                }
+            }
+            
+            return workbenchesBySettlement;
+        }
+        
+        private string GetSettlementName(Map map)
+        {
+            if (map == null)
+                return "ProductionFlow.UnknownSettlement".Translate();
+            
+            if (map.info != null && map.info.parent != null)
+            {
+                return map.info.parent.Label;
+            }
+            
+            // Fallback to map index if no parent
+            return "ProductionFlow.Map".Translate() + " " + (Current.Game.Maps.IndexOf(map) + 1);
+        }
 
         private List<Pawn> GetAvailablePawns()
         {
@@ -1325,10 +1478,10 @@ namespace ProductionFlow
                     {
                         if (Widgets.ButtonImageFitted(pasteRect, TexButton.Paste, Color.white))
                         {
-                            Bill bill = BillUtility.Clipboard.Clone();
-                            bill.InitializeAfterClone();
-                            billGiver.BillStack.AddBill(bill);
-                            SoundDefOf.Tick_Low.PlayOneShotOnCamera();
+                        Bill bill = BillUtility.Clipboard.Clone();
+                        bill.InitializeAfterClone();
+                        AddBillAtStart(billGiver, bill);
+                        SoundDefOf.Tick_Low.PlayOneShotOnCamera();
                         }
                         TooltipHandler.TipRegionByKey(pasteRect, "PasteBillTip");
                     }
@@ -1358,7 +1511,7 @@ namespace ProductionFlow
                                         Bill.CreateNoPawnsWithSkillDialog(localRecipe);
                                     }
                                     Bill bill2 = localRecipe.MakeNewBill();
-                                    billGiver.BillStack.AddBill(bill2);
+                                    AddBillAtStart(billGiver, bill2);
                                     if (localRecipe.conceptLearned != null)
                                     {
                                         PlayerKnowledgeDatabase.KnowledgeDemonstrated(localRecipe.conceptLearned, KnowledgeAmount.Total);
@@ -1413,6 +1566,12 @@ namespace ProductionFlow
             }
             
             return options;
+        }
+
+        private void AddBillAtStart(IBillGiver billGiver, Bill bill)
+        {
+            bill.billStack = billGiver.BillStack;
+            billGiver.BillStack.Bills.Insert(0, bill);
         }
 
         private void CreateBills()
@@ -1474,7 +1633,7 @@ namespace ProductionFlow
                             }
                         }
                         
-                        billGiver.BillStack.AddBill(bill);
+                        AddBillAtStart(billGiver, bill);
                         billsCreated++;
                     }
                 }
@@ -1822,7 +1981,7 @@ namespace ProductionFlow
                             }
                         }
                         
-                        billGiver.BillStack.AddBill(bill);
+                        AddBillAtStart(billGiver, bill);
                         mainBillsCreated++;
                     }
                 }
@@ -2004,7 +2163,7 @@ namespace ProductionFlow
                             remainingRecipes = 0;
                         }
                         
-                        billGiver.BillStack.AddBill(bill);
+                        AddBillAtStart(billGiver, bill);
                         usedWorkbenches.Add(workbench);
                         billsCreated++;
                         

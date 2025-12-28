@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
 	<name>ProductionFlow</name>
-	<author>ProductionFlow Mod</author>
+	<author>Avalakh</author>
 	<packageId>ProductionFlow.Mod</packageId>
 	<supportedVersions>
 		<li>1.6</li>

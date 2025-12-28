@@ -61,4 +61,6 @@
 	<ProductionFlow.RelatedRecipes>Связанные рецепты</ProductionFlow.RelatedRecipes>
 	<ProductionFlow.SelectRecipeForRelatedRecipes>Выберите рецепт для просмотра связанных рецептов</ProductionFlow.SelectRecipeForRelatedRecipes>
 	<ProductionFlow.NoRelatedRecipes>Нет связанных рецептов</ProductionFlow.NoRelatedRecipes>
+	<ProductionFlow.UnknownSettlement>Неизвестное поселение</ProductionFlow.UnknownSettlement>
+	<ProductionFlow.Map>Карта</ProductionFlow.Map>
 </LanguageData>

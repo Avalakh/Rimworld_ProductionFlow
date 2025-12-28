@@ -60,4 +60,6 @@
 	<ProductionFlow.RelatedRecipes>Related Recipes</ProductionFlow.RelatedRecipes>
 	<ProductionFlow.SelectRecipeForRelatedRecipes>Select a recipe to see related recipes</ProductionFlow.SelectRecipeForRelatedRecipes>
 	<ProductionFlow.NoRelatedRecipes>No related recipes</ProductionFlow.NoRelatedRecipes>
+	<ProductionFlow.UnknownSettlement>Unknown Settlement</ProductionFlow.UnknownSettlement>
+	<ProductionFlow.Map>Map</ProductionFlow.Map>
 </LanguageData>
