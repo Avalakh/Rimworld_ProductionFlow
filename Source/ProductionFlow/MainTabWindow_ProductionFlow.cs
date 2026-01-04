@@ -129,8 +129,9 @@ namespace ProductionFlow
         {
             get 
             { 
-                float maxHeight = Screen.height * 0.8f;
-                return new Vector2(1600f, Mathf.Min(800f, maxHeight)); 
+                float maxWidth = UI.screenWidth;
+                float maxHeight = UI.screenHeight - 35f; // 35 - высота нижней панели
+                return new Vector2(Mathf.Min(1600f, maxWidth), Mathf.Min(800f, maxHeight)); 
             }
         }
 
